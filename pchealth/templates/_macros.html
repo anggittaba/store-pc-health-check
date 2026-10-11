@@ -1,0 +1,2 @@
+{% macro sev(s) %}<span class="sev sev-{{ s }}">{{ s }}</span>{% endmacro %}
+{% macro tags(i) %}{% if i.is_new %}<span class="tag new">new today</span>{% endif %}{% if i.streak > 1 %} <span class="tag">{{ ordinal(i.streak) }} day in a row</span>{% endif %}{% if i.trend == 'worsening' %} <span class="tag worse">getting worse</span>{% elif i.trend == 'improving' %} <span class="tag">improving</span>{% endif %}{% if i.handled %} <span class="tag done">handled</span>{% endif %}{% endmacro %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sev, tags %}
+{% block title %}Stores{% endblock %}
+{% block main %}
+<div class="page-title">
+  <h1>Stores with issues</h1>
+  <p>{{ all_flagged }} of {{ total }} stores have at least one issue on {{ nice_date(day) }}; {{ healthy }} passed every check.</p>
+</div>
+<form class="filters" method="get" action="/stores">
+  <input type="hidden" name="d" value="{{ day }}">
+  <label>Issue type
+    <select name="type">
+      <option value="">All types</option>
+      {% for k in ISSUE_ORDER %}<option value="{{ k }}" {% if f_type == k %}selected{% endif %}>{{ LABELS[k] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Severity
+    <select name="severity">
+      <option value="">Any</option>
+      {% for s in ['critical', 'high', 'medium'] %}<option value="{{ s }}" {% if f_sev == s %}selected{% endif %}>{{ s|capitalize }}{% if s != 'critical' %} and above{% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Owner
+    <select name="owner">
+      <option value="">Anyone</option>
+      {% for o in OWNERS %}<option {% if f_owner == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+    </select>
+  </label>
+  <div class="radio-row" role="radiogroup" aria-label="Show">
+    <label><input type="radio" name="show" value="open" {% if show == 'open' %}checked{% endif %}> Open only</label>
+    <label><input type="radio" name="show" value="all" {% if show == 'all' %}checked{% endif %}> Include handled</label>
+  </div>
+  <button class="chip solid" type="submit">Filter</button>
+  {% if f_type or f_sev or f_owner or show != 'open' %}<a class="chip" href="/stores?d={{ day }}">Clear</a>{% endif %}
+</form>
+<p class="figure-note" style="margin-bottom: var(--space-sm)">{{ rows|length }} {{ 'store' if rows|length == 1 else 'stores' }} match.</p>
+{% if rows %}
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Store</th><th>Worst</th><th>Issues</th><th class="num">Longest</th><th>Owners</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr class="{{ 'is-handled' if not r.open }}">
+    <td class="store-cell"><a href="/stores/{{ r.code }}?d={{ day }}">{{ r.name }}</a><span class="code">{{ r.code }} · {{ r.area }}</span></td>
+    <td>{{ sev(r.worst) }}</td>
+    <td>{% for i in r['items'] %}{% set tg = tags(i)|trim %}<div>{{ LABELS[i.issue_type] }} <span class="muted">· {{ i.where }} · <span class="reading">{{ i.value }}</span></span>{% if tg %} <span class="muted">·</span> {{ tg }}{% endif %}</div>{% endfor %}</td>
+    <td class="num tnum">{{ r.streak }}d</td>
+    <td>{{ r.owners|join(', ') }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="empty">No store matches these filters.</p>
+{% endif %}
+{% endblock %}

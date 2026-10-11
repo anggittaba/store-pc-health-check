@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sev, tags %}
+{% block title %}{{ store.code }} {{ store.name }}{% endblock %}
+{% block main %}
+<div class="store-head">
+  <div>
+    <h1>{{ store.name }}</h1>
+    <p class="meta">{{ store.code }} · {{ store.area }} · {{ pcs|length }} {{ 'PC' if pcs|length == 1 else 'PCs' }} · {% if issues %}{{ issues|length }} {{ 'issue' if issues|length == 1 else 'issues' }} today{% else %}all checks passed today{% endif %}</p>
+    {% if explanation %}<p class="explain">{{ explanation }}<span class="by">Explanation written by {{ 'the template writer' if writer.startswith('template') else writer }} from the rule results.</span></p>{% endif %}
+  </div>
+  <a class="chip" href="/stores?d={{ day }}">← All stores</a>
+</div>
+
+{% for i in issues %}
+<article class="issue" id="{{ i.issue_type }}{{ '-' ~ i.pc_id if i.pc_id }}">
+  <div>
+    {{ sev(i.severity) }}{% if i.severity != i.base_severity %} <span class="tag">raised from {{ i.base_severity }}: {{ ordinal(i.streak) }} day in a row</span>{% endif %}
+    <h3>{{ LABELS[i.issue_type] }} · {{ i.where }}</h3>
+    <p>{{ tags(i) }}</p>
+    <dl class="facts">
+      <dt>Reading</dt><dd class="mono">{{ i.value }}</dd>
+      <dt>Limit</dt><dd class="mono">{{ i.threshold }}</dd>
+      <dt>Why flagged</dt><dd>{{ i.reason }}</dd>
+    </dl>
+    <p class="impact">{{ i.pb.impact }}</p>
+  </div>
+  <div>
+    <p class="owner">{{ i.pb.owner }}</p>
+    <ol>{% for s in i.pb.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+    <p class="figure-note">Escalate: {{ i.pb.escalate }}</p>
+    <div class="handled-box">
+      {% for h in i.handled %}
+      <p class="handled-note"><span class="tag done">Handled</span> by {{ h.by }} at {{ h.at|hm }}{% if h.note %}: {{ h.note }}{% endif %}
+        <form method="post" action="/handled/{{ h.id }}/undo"><input type="hidden" name="back" value="/stores/{{ store.code }}?d={{ day }}"><button class="linkish" type="submit">Undo</button></form></p>
+      {% else %}
+      <form method="post" action="/handled" class="handled-box">
+        <input type="hidden" name="d" value="{{ day }}"><input type="hidden" name="store" value="{{ store.code }}">
+        <input type="hidden" name="issue_type" value="{{ i.issue_type }}"><input type="hidden" name="back" value="/stores/{{ store.code }}?d={{ day }}">
+        <label class="label" for="note-{{ loop.index }}-{{ i.issue_type }}">Note (optional)</label>
+        <textarea id="note-{{ loop.index }}-{{ i.issue_type }}" name="note" placeholder="e.g. Store moved the box off the PC; check again tomorrow."></textarea>
+        <button class="chip" type="submit">Mark handled</button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+</article>
+{% endfor %}
+{% if resolved %}<p class="figure-note" style="margin-top: var(--space-md)">Cleared since the last check: {% for r in resolved %}{{ LABELS[r.issue_type] }} (after {{ r.open_days }}d){% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+
+<section>
+  <div class="section-head"><h2>PCs at today's pull</h2><p>{{ nice_date(day) }}</p></div>
+  <div class="table-scroll">
+  <table class="pc-table">
+    <thead><tr><th>PC</th><th>CPU · RAM</th><th>Disk</th><th>OS</th><th class="num">CPU °C</th><th>LAN</th><th>Restarted</th><th>Card terminal</th><th>UPS</th></tr></thead>
+    <tbody>
+    {% for p in pcs %}{% set s = today.get(p.pc_id) %}
+      <tr>
+        <td>{{ p.role }}<div class="mono muted">{{ p.pc_id }}</div></td>
+        {% if s %}
+        <td>{{ s.cpu_model }}<div class="muted">{{ s.ram_gb }} GB (spec {{ s.ram_spec_gb }})</div></td>
+        <td>{{ s.disk_total_gb }} GB<div class="muted">{{ s.disk_free_pct }}% free · {{ s.smart_status }}</div></td>
+        <td>{{ s.os_build }}<div class="muted">{{ s.win_activation }}</div></td>
+        <td class="num tnum">{{ s.cpu_temp_c }}</td>
+        <td>{{ s.lan_link }}{% if s.lan_link == 'up' %} · {{ s.lan_speed_mbps }} Mbps<div class="muted">{{ s.packet_loss_pct }}% loss · {{ s.latency_ms|round|int }} ms</div>{% endif %}</td>
+        <td>{{ s.last_boot[:10] }}<div class="muted">{{ s.uptime_days }} days up</div></td>
+        <td>{{ s.edc_status }}</td>
+        <td>{% if s.ups_detected %}seen · {{ s.ups_battery_pct|int }}%{% else %}not detected{% endif %}</td>
+        {% else %}
+        <td colspan="8" class="muted">No pull from this PC today.</td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="section-head"><h2>Last 30 days</h2><p>{{ nice_date(history_from) }} to {{ nice_date(day) }} · dots mark days a rule flagged</p></div>
+  <div class="legend">{% for r in panels.legend %}<span class="s{{ loop.index0 }}">{{ r }}</span>{% endfor %}<span class="lim">limit from rules.toml</span></div>
+  <div class="panels">
+    {% for p in panels.lines %}
+    <div class="panel"><h3>{{ p.title }} ({{ p.unit }})</h3>{{ p.svg }}</div>
+    {% endfor %}
+  </div>
+  <div class="strips">
+    {% for st in panels.strips %}{% for row in st.rows %}
+    <div class="strip"><span>{{ st.title }} · {{ row.role }}</span>
+      <span class="cells">{% for c in row.cells %}<span class="cell {{ c.state }}" title="{{ c.tip }}"></span>{% endfor %}</span></div>
+    {% endfor %}{% endfor %}
+    <p class="figure-note swatches"><span><i class="cell ok"></i>OK</span><span><i class="cell bad"></i>problem</span><span><i class="cell warn"></i>UPS battery low</span><span><i class="cell missing"></i>no pull that day</span></p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,14 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# runtime data: the SQLite database and exports
+var/
+out/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

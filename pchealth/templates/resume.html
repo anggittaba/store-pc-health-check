@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Resume{% endblock %}
+{% block main %}
+<div class="resume">
+  <div>
+    <h1>Today's resume</h1>
+    <p class="muted">Copy it into the team chat yourself. This page never sends it.</p>
+    <pre class="paper-copy" id="resume-text">{{ text }}</pre>
+    <div class="copy-row">
+      <button class="chip solid" type="button" id="copy" data-target="resume-text">Copy text</button>
+      <a class="chip" href="/export.xlsx?d={{ day }}">Download Excel</a>
+      <a class="chip" href="/export.csv?d={{ day }}">Download CSV</a>
+      <span class="copied" id="copied" role="status" aria-live="polite"></span>
+    </div>
+    <dl class="split-ai">
+      <dt>Written by</dt><dd>{{ 'Template writer (no AI key set). Same facts, fixed wording.' if writer.startswith('template') else writer }}{% if 'rejected' in writer %} The AI draft was rejected by the checks, so the template text is shown.{% endif %}</dd>
+      <dt>AI does</dt><dd>Only the wording of this resume and the store explanations, when a key is set.</dd>
+      <dt>Automated</dt><dd>Pulling the data, the rules, severity, streaks, new and cleared lists, the export.</dd>
+      <dt>A person decides</dt><dd>Whether to send this, who to call, and when an issue counts as handled.</dd>
+    </dl>
+  </div>
+  <div>
+    <div class="section-head"><h2>Per store</h2><p>{{ rows|length }} stores</p></div>
+    <ul class="note-list">
+      {% for r in rows[:12] %}
+      <li><h3><a href="/stores/{{ r.code }}?d={{ day }}">{{ r.code }} {{ r.name }}</a></h3><p>{{ expl.get(r.code, '') }}</p></li>
+      {% endfor %}
+    </ul>
+    {% if rows|length > 12 %}<p class="figure-note"><a href="/stores?d={{ day }}&show=all">{{ rows|length - 12 }} more stores on the store list →</a></p>{% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('copy').addEventListener('click', async (e) => {
+  const text = document.getElementById(e.currentTarget.dataset.target).innerText;
+  const note = document.getElementById('copied');
+  try { await navigator.clipboard.writeText(text); note.textContent = 'Copied'; }
+  catch { note.textContent = 'Select the text and copy it by hand'; }
+  note.classList.add('on'); setTimeout(() => note.classList.remove('on'), 1800);
+});
+</script>
+{% endblock %}

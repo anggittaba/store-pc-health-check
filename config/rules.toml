@@ -1,0 +1,194 @@
+# Store PC Health Check: rule thresholds and handling playbooks.
+#
+# Every issue the daily run reports comes from these rules, never from the AI.
+# Change a number here, rerun `python -m pchealth run`, and the recap changes with it.
+# Severity levels, lowest to highest: low, medium, high, critical.
+
+[general]
+# A store whose issue has been seen this many days in a row is "recurring" and
+# moves up one severity level (types listed in `no_escalation` are exempt).
+recurring_after_days = 3
+no_escalation = ["no_reboot", "windows_activation"]
+# Trend: the last N daily readings all moving the wrong way by at least `min_step`.
+trend_window_days = 3
+
+[overheating]
+label = "Overheating"
+metric = "cpu_temp_c"
+high_at = 85        # CPU temperature in °C at the morning pull
+critical_at = 95
+trend_min_step = 1.5
+
+[disk_space]
+label = "Disk almost full"
+metric = "disk_free_pct"
+medium_at_or_below = 10   # % free
+high_at_or_below = 3
+trend_min_step = 0.5
+
+[ram_below_spec]
+label = "RAM below spec"
+metric = "ram_gb"
+minimum_gb = 8
+
+[no_reboot]
+label = "No restart"
+metric = "uptime_days"
+low_at = 7          # store PCs are meant to restart at least weekly
+medium_at = 21
+
+[windows_activation]
+label = "Windows not activated"
+metric = "win_activation"
+ok_values = ["Licensed"]
+medium_values = ["Unlicensed"]   # anything else not in ok_values is low
+
+[edc_offline]
+label = "Card terminal offline"
+metric = "edc_status"
+# One offline reading is high (the till can't take cards); the recurring rule
+# lifts it to critical on the 3rd day in a row.
+offline_severity = "high"
+
+[ups_problem]
+label = "UPS problem"
+metric = "ups_battery_pct"
+not_detected_severity = "medium"
+battery_medium_at_or_below = 40
+battery_high_at_or_below = 20
+trend_min_step = 3
+
+[lan_degraded]
+label = "LAN degraded"
+metric = "packet_loss_pct"
+link_down_severity = "critical"
+loss_medium_at = 5          # % packet loss to the store gateway
+latency_medium_at = 100     # ms to the store gateway
+expected_speed_mbps = 1000
+slow_link_severity = "low"
+trend_min_step = 1.0
+
+[disk_smart]
+label = "Disk health warning"
+metric = "smart_status"
+caution_severity = "high"
+bad_severity = "critical"
+
+[missing_pull]
+label = "No data from store"
+missing_severity = "high"
+
+# ---------------------------------------------------------------------------
+# Playbooks: what to do, and who does it. Owners: "Store staff", "Remote IT", "Vendor".
+# ---------------------------------------------------------------------------
+
+[playbook.overheating]
+owner = "Store staff"
+impact = "A hot PC slows down, freezes at the till and shortens hardware life."
+steps = [
+  "Ask the store to check the PC has 10 cm of free space around the vents and nothing stacked on it.",
+  "Remote IT checks CPU load for a stuck process and ends it.",
+  "If it is still above the limit tomorrow, book the vendor to clean or replace the fan.",
+]
+escalate = "Vendor visit if it is still flagged on day 3."
+
+[playbook.disk_space]
+owner = "Remote IT"
+impact = "A full disk stops sales from saving and blocks updates."
+steps = [
+  "Clear temp files, old logs and the update cache remotely.",
+  "Check which folder grew fastest since last week and fix the cause (usually a log that never rotates).",
+  "If free space is still under the limit after clean-up, plan a larger disk.",
+]
+escalate = "Raise a disk upgrade if clean-up frees less than 5%."
+
+[playbook.ram_below_spec]
+owner = "Vendor"
+impact = "The PC reports less memory than its spec, so a module has likely failed or been swapped."
+steps = [
+  "Book the vendor to reseat or replace the memory module.",
+  "Before the visit, Remote IT confirms the expected memory in the asset list.",
+  "Update the asset list after the visit.",
+]
+escalate = "Flag to the asset owner if the module was swapped without a ticket."
+
+[playbook.no_reboot]
+owner = "Remote IT"
+impact = "PCs that never restart miss updates and slowly leak memory."
+steps = [
+  "Schedule a restart after closing time tonight.",
+  "Check the nightly restart task is still enabled on this PC.",
+  "Tell the store the PC will restart after closing.",
+]
+escalate = "Fix the scheduled task if it is still flagged after the restart."
+
+[playbook.windows_activation]
+owner = "Remote IT"
+impact = "An unactivated copy of Windows is a licensing compliance gap and shows a watermark."
+steps = [
+  "Check the license key and the activation error on the PC.",
+  "Re-apply the volume or retail key from the license register.",
+  "If the key is rejected, open a case with the license provider.",
+]
+escalate = "Report to the license owner if the key is not in the register."
+
+[playbook.edc_offline]
+owner = "Store staff"
+impact = "The till can't take card payments on this lane."
+steps = [
+  "Ask the store to check the card terminal is powered and its cable or base is seated.",
+  "Restart the card terminal, then run a test transaction.",
+  "If it is still offline, call the terminal provider's helpdesk and log the case number.",
+]
+escalate = "Terminal provider swap if offline 2 days in a row."
+
+[playbook.ups_problem]
+owner = "Store staff"
+impact = "Without a working UPS, a short power dip shuts the PC down mid-sale and can corrupt the disk."
+steps = [
+  "Ask the store to check the UPS is switched on and its USB/data cable is plugged into the PC.",
+  "Remote IT checks the UPS shows in the power settings and runs a self-test.",
+  "If the battery stays low after a full charge, order a replacement battery.",
+]
+escalate = "Vendor battery or UPS swap if the battery is under 20%."
+
+[playbook.lan_degraded]
+owner = "Remote IT"
+impact = "Slow or dropping network delays card approvals and stock updates."
+steps = [
+  "Ping the store gateway and compare with the other PCs in the same store.",
+  "If only this PC is affected, ask the store to reseat or swap the network cable.",
+  "If the whole store is affected, check the store router and open a ticket with the line provider.",
+]
+escalate = "Line provider ticket if loss stays above the limit for 2 days."
+
+[playbook.disk_smart]
+owner = "Vendor"
+impact = "The disk is reporting early signs of failure; data loss is likely if it is ignored."
+steps = [
+  "Book the vendor to replace the disk and restore the image this week.",
+  "Before the visit, Remote IT confirms the last backup of this PC finished.",
+  "Keep the old disk until the store confirms the PC works.",
+]
+escalate = "Same-week replacement; critical if the status is Bad."
+
+[playbook.missing_pull]
+owner = "Remote IT"
+impact = "The health pull did not arrive, so every check for this store is unknown today."
+steps = [
+  "Check whether the store is reachable at all (VPN / router).",
+  "If reachable, restart the health agent on the store PCs and pull again.",
+  "If not reachable, call the store to check power and the router.",
+]
+escalate = "Treat as a store outage if there is no data for 2 days."
+
+# Variant used when the UPS is seen but its battery is low (picked by rules.playbook_for).
+[playbook.ups_battery]
+owner = "Vendor"
+impact = "A worn UPS battery won't carry the PC through a power dip, so a short outage still crashes the till."
+steps = [
+  "Order a replacement UPS battery (or UPS) from the vendor.",
+  "Until it arrives, ask the store to keep the UPS plugged in and charging.",
+  "After the swap, Remote IT runs a UPS self-test and checks the battery reads above 90%.",
+]
+escalate = "Same-week swap if the battery is under 20%."

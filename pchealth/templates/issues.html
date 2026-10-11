@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sev %}
+{% block title %}Issue types{% endblock %}
+{% block main %}
+<div class="page-title">
+  <h1>Issue types</h1>
+  <p>What kind of problems the fleet has today, who owns them, and how each type moved over the last {{ n_days }} days.</p>
+</div>
+<div class="table-scroll">
+<table>
+  <thead><tr><th>Issue type</th><th class="num">Today</th><th class="num">Stores</th><th class="num">New</th><th class="num">3+ days</th><th class="num">Cleared</th><th>Worst</th><th>Owner</th><th>{{ n_days }} days</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/stores?d={{ day }}&type={{ r.type }}&show=all">{{ r.label }}</a></td>
+    <td class="num tnum">{{ r.count }}</td>
+    <td class="num tnum">{{ r.stores }}</td>
+    <td class="num tnum">{{ r.new }}</td>
+    <td class="num tnum">{{ r.recurring }}</td>
+    <td class="num tnum">{{ r.resolved }}</td>
+    <td>{% if r.worst %}{{ sev(r.worst) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{{ r.owner }}</td>
+    <td style="width: 9rem">{{ r.spark }}<span class="figure-note tnum">{{ r.total30 }} flags in {{ n_days }} days</span></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="figure-note" style="margin-top: var(--space-md)">"3+ days" counts issues seen on 3 or more checks in a row. Thresholds and owners live in config/rules.toml.</p>
+{% endblock %}

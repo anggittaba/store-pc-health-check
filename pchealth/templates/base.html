@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Store PC Health Check{% endblock %} · {{ nice_date(day) }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600&family=Playfair+Display:wght@700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header class="mast">
+    <div class="mast-line">
+      {% if prev_day %}<a href="{{ request.url.path }}?d={{ prev_day }}" aria-label="Previous day">‹ {{ nice_date(prev_day)[:-5] }}</a>{% else %}<span class="off">‹</span>{% endif %}
+      <span class="mast-issue">Day {{ edition }} of {{ n_days }} · {{ nice_date(day) }}{% if pull_window %} · pulls received {{ pull_window }}{% endif %}{% if day != latest %} · <a href="{{ request.url.path }}">back to today</a>{% endif %}</span>
+      {% if next_day %}<a href="{{ request.url.path }}?d={{ next_day }}" aria-label="Next day">{{ nice_date(next_day)[:-5] }} ›</a>{% else %}<span class="off">›</span>{% endif %}
+    </div>
+    <a class="mast-name" href="/?d={{ day }}">Store PC Health Check</a>
+    <nav class="mast-nav" aria-label="Primary">
+      <ul>
+        <li><a href="/?d={{ day }}" {% if page == 'today' %}aria-current="page"{% endif %}>Today</a></li>
+        <li><a href="/stores?d={{ day }}" {% if page == 'stores' %}aria-current="page"{% endif %}>Stores</a></li>
+        <li><a href="/issues?d={{ day }}" {% if page == 'issues' %}aria-current="page"{% endif %}>Issue types</a></li>
+        <li><a href="/resume?d={{ day }}" {% if page == 'resume' %}aria-current="page"{% endif %}>Resume</a></li>
+        <li><a href="/runs?d={{ day }}" {% if page == 'runs' %}aria-current="page"{% endif %}>Run log</a></li>
+      </ul>
+    </nav>
+    <hr class="mast-rule" aria-hidden="true">
+  </header>
+  <main id="main">
+  {% block main %}{% endblock %}
+  </main>
+  <footer class="colophon">
+    <p>{% if run %}Run {{ run.id }} for {{ day }}, finished {{ run.finished_at|replace('T', ' ') }}, trigger {{ run.trigger }}. {{ run.pcs_reported }} of {{ run.pcs_expected }} PCs reported; {{ run.stores_missing }} {{ 'store' if run.stores_missing == 1 else 'stores' }} sent nothing. Text writer: {{ run.writer }}.{% endif %}
+    Issues and severities come from fixed rules in config/rules.toml, never from AI. The resume is a draft: nothing here is sent to anyone automatically.
+    All stores, codes and readings are synthetic, generated for this demo.</p>
+  </footer>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

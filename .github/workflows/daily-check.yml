@@ -1,0 +1,38 @@
+# Daily check. Runs every day at 06:00 UTC+7 (23:00 UTC the day before).
+# Demo mode: a fresh runner has no database, so it regenerates the same deterministic
+# synthetic history (30 days ending today) and runs today's check on it. In production
+# you would load the real daily health pull and keep the database between runs.
+# Output (recap Excel/CSV, resume text, evaluation) is uploaded as a build artifact.
+# Nothing is sent to anyone.
+name: daily-check
+
+on:
+  schedule:
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Etc/GMT-7   # UTC+7, so "today" matches the stores' day
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Generate synthetic history and run the daily checks
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python -m pchealth backfill --days 29 --end "$(date -d yesterday +%F)"
+          PY=python scripts/daily.sh
+          python -m pchealth evaluate --out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pc-health-recap
+          path: out/
+          retention-days: 14

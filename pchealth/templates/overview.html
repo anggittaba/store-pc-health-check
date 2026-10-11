@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sev, tags %}
+{% block title %}Today{% endblock %}
+{% block main %}
+<section class="hero" aria-labelledby="hero-h">
+  <div class="hero-figure">
+    <span class="figure tnum" aria-hidden="true">{{ rows|length }}</span>
+    <h1 id="hero-h"><span class="skip">{{ rows|length }} </span>stores need someone today.</h1>
+  </div>
+  <div class="hero-side">
+    <p class="qualifier">Out of {{ n_stores }} stores, <strong>{{ urgent|length }}</strong> have a high or critical issue{% if missing %} and <strong>{{ missing|length }}</strong> sent no data at all{% endif %}. {{ new|length }} issues are new since yesterday; {{ resolved|length }} cleared.</p>
+    <div class="sev-strip">
+      {% for s in ['critical', 'high', 'medium', 'low'] %}
+      <a href="/stores?d={{ day }}&severity={{ s }}"><span class="n tnum">{{ sev_count[s] }}</span><span class="sev sev-{{ s }}">{{ s }}</span></a>
+      {% endfor %}
+    </div>
+    <a class="chip" href="/resume?d={{ day }}">Read today's resume →</a>
+  </div>
+</section>
+
+<section aria-labelledby="first-h">
+  <div class="section-head">
+    <h2 id="first-h">Do first</h2>
+    <p>Stores ranked by their worst issue, then by how long it has lasted.</p>
+  </div>
+  {% if urgent %}
+  <div class="table-scroll">
+  <table>
+    <thead><tr><th class="rank">#</th><th>Store</th><th>Worst issue</th><th>Reading</th><th>Owner · first step</th><th class="hide-sm">Also</th></tr></thead>
+    <tbody>
+    {% for r in urgent[:8] %}{% set i = r.top %}
+      <tr class="{{ 'is-handled' if not r.open }}">
+        <td class="rank">{{ loop.index }}</td>
+        <td class="store-cell"><a href="/stores/{{ r.code }}?d={{ day }}">{{ r.name }}</a><span class="code">{{ r.code }} · {{ r.area }}</span></td>
+        <td>{{ sev(i.severity) }}<div>{{ LABELS[i.issue_type] }} · {{ i.where }}</div><div>{{ tags(i) }}</div></td>
+        <td class="reading">{{ i.value }}</td>
+        <td><strong>{{ i.owner }}</strong><p class="step">{{ i.pb.steps[0] }}</p></td>
+        <td class="hide-sm">{% for o in r['items'][1:] %}{{ LABELS[o.issue_type] }}{% if not loop.last %}, {% endif %}{% else %}<span class="muted">—</span>{% endfor %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if urgent|length > 8 %}<p class="figure-note"><a href="/stores?d={{ day }}&severity=high">{{ urgent|length - 8 }} more high or critical stores →</a></p>{% endif %}
+  {% else %}
+  <p class="empty">Nothing high or critical today. Medium and low items are on the <a href="/stores?d={{ day }}">store list</a>.</p>
+  {% endif %}
+</section>
+
+<section class="split">
+  <div>
+    <div class="section-head"><h2>By issue type</h2><p>{{ issues|length }} issues across {{ rows|length }} stores</p></div>
+    <ul class="typebars">
+      {% for b in type_bars %}
+      <li><a href="/stores?d={{ day }}&type={{ b.type }}&show=all">{{ b.label }}</a><span class="track"><span class="fill" style="width: {{ b.pct }}%"></span></span><span class="tnum">{{ b.count }}</span></li>
+      {% endfor %}
+    </ul>
+    <div class="ledger">
+      <div>
+        <h3>New since yesterday</h3>
+        <ul>{% for i in new[:7] %}<li><a href="/stores/{{ i.store_code }}?d={{ day }}">{{ i.store_code }}</a> · {{ LABELS[i.issue_type] }}</li>{% else %}<li class="muted">Nothing new.</li>{% endfor %}
+        {% if new|length > 7 %}<li class="muted">and {{ new|length - 7 }} more</li>{% endif %}</ul>
+      </div>
+      <div>
+        <h3>Cleared since yesterday</h3>
+        <ul>{% for r in resolved[:7] %}<li><a href="/stores/{{ r.store_code }}?d={{ day }}">{{ r.store_code }}</a> · {{ LABELS[r.issue_type] }} <span class="muted">after {{ r.open_days }}d</span></li>{% else %}<li class="muted">Nothing cleared.</li>{% endfor %}
+        {% if resolved|length > 7 %}<li class="muted">and {{ resolved|length - 7 }} more</li>{% endif %}</ul>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="section-head"><h2>Last 30 days</h2><p>stores flagged per day</p></div>
+    {{ spark }}
+    <p class="figure-note"><span class="key">all flagged stores</span><span class="key urgent">high or critical</span></p>
+    <div class="section-head" style="margin-top: var(--space-xl)"><h2>Open work by owner</h2></div>
+    <table>
+      <tbody>
+      {% for o in OWNERS %}<tr><td>{{ o }}</td><td class="num tnum">{{ owners[o] }}</td><td class="muted">{{ {'Store staff': 'checks on site, guided by phone', 'Remote IT': 'fixes from the office', 'Vendor': 'site visit or parts'}[o] }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if missing %}
+    <div class="section-head" style="margin-top: var(--space-xl)"><h2>No data today</h2></div>
+    <div class="ledger one"><ul>{% for i in missing %}<li><a href="/stores/{{ i.store_code }}?d={{ day }}">{{ i.store_code }}</a> · {% if i.streak > 1 %}{{ ordinal(i.streak) }} day without a pull{% else %}no pull today{% endif %}</li>{% endfor %}</ul></div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Run log{% endblock %}
+{% block main %}
+<div class="page-title">
+  <h1>Run log</h1>
+  <p>Every daily check, newest first. Running a day again replaces that day's result; the log keeps both runs so it is visible.</p>
+</div>
+<div class="table-scroll">
+<table>
+  <thead><tr><th class="num">Run</th><th>Day checked</th><th>Finished</th><th>Trigger</th><th class="num">PCs reported</th><th class="num">No data</th><th class="num">Stores flagged</th><th class="num">Issues</th><th class="num">New</th><th class="num">Cleared</th><th>Writer</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+  <tr>
+    <td class="num tnum">{{ r.id }}</td>
+    <td><a href="/?d={{ r.run_date }}">{{ nice_date(r.run_date) }}</a></td>
+    <td class="tnum">{{ r.finished_at|replace('T', ' ') }}</td>
+    <td>{{ r.trigger }}</td>
+    <td class="num tnum">{{ r.pcs_reported }}/{{ r.pcs_expected }}</td>
+    <td class="num tnum">{{ r.stores_missing }}</td>
+    <td class="num tnum">{{ r.stores_flagged }}</td>
+    <td class="num tnum">{{ r.issues }}</td>
+    <td class="num tnum">{{ r.new }}</td>
+    <td class="num tnum">{{ r.resolved }}</td>
+    <td>{{ r.writer }}</td>
+    <td class="muted">{{ 'replaced an earlier run' if r.replaced }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

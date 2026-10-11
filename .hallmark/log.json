@@ -1,0 +1,13 @@
+[
+  {
+    "date": "2026-10-11",
+    "genre": "editorial",
+    "macrostructure": "Stat-Led",
+    "theme": "Newsprint",
+    "theme_axes": "light (salmon) / roman serif (Playfair Display) / warm (burgundy 28)",
+    "nav": "N6 newspaper masthead",
+    "footer": "Ft4 dense colophon (run log)",
+    "enrichment": "none",
+    "brief": "Store PC health recap · ranked daily list of stores to fix, per-store 30-day history, copyable resume"
+  }
+]
