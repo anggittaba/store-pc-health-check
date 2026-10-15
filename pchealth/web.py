@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import charts, db, export, resume, rules, settings
+from . import charts, db, export, fleet, resume, rules, settings
 from .rules import ISSUE_ORDER, RANK, SEVERITIES
 
 HERE = Path(__file__).parent
@@ -27,7 +27,8 @@ def create_app(con=None, cfg=None) -> FastAPI:
     t = Jinja2Templates(directory=str(HERE / "templates"))
     labels = {k: cfg[k]["label"] for k in ISSUE_ORDER}
     t.env.globals.update(LABELS=labels, ISSUE_ORDER=ISSUE_ORDER, SEVERITIES=SEVERITIES, OWNERS=OWNERS,
-                         PLAYBOOK=cfg["playbook"], nice_date=resume.nice_date, ordinal=resume.ordinal, low=resume.low)
+                         PLAYBOOK=cfg["playbook"], TAG=fleet.TAG, STATUS_LABEL=fleet.STATUS_LABEL,
+                         STATUSES=fleet.STATUSES, nice_date=resume.nice_date, ordinal=resume.ordinal, low=resume.low)
     t.env.filters["hm"] = lambda v: (v or "")[11:16]
 
     def run_dates() -> list[str]:
@@ -83,36 +84,83 @@ def create_app(con=None, cfg=None) -> FastAPI:
         out.sort(key=lambda s: resume.store_rank(s["items"]))
         return out
 
+    def tiles(stores, pcs, issues) -> list[dict]:
+        """One tile per store (all of them), worst first, with status colour and worst-issue tag."""
+        by = defaultdict(list)
+        for i in issues:
+            by[i["store_code"]].append(i)
+        n_pcs = Counter(p["store_code"] for p in pcs.values())
+        order = {"critical": 0, "nodata": 1, "warning": 2, "healthy": 3}
+        out = []
+        for code, st in stores.items():
+            items = by.get(code, [])
+            status = fleet.store_status(items)
+            top = items[0] if items else None
+            out.append({"code": code, "name": st["name"], "area": st["area"], "status": status, "top": top,
+                        "n": len(items), "pcs": n_pcs[code], "types": sorted({i["issue_type"] for i in items}),
+                        "open": any(not i["handled"] for i in items), "rank": resume.store_rank(items) if items else None})
+        out.sort(key=lambda t: (order[t["status"]], t["rank"] or (0,), t["code"]))
+        return out
+
+    def filter_tiles(all_tiles, status: str, type_: str) -> list[dict]:
+        sel = all_tiles
+        if status in fleet.STATUSES:
+            sel = [x for x in sel if x["status"] == status]
+        if type_ in ISSUE_ORDER:
+            sel = [x for x in sel if type_ in x["types"]]
+        return sel
+
+    def window(day: str) -> list[str]:
+        return [x for x in run_dates() if x <= day][-30:]
+
+    def history(code: str, day: str, store_pcs: list[dict]):
+        days = [x for x in db.snapshot_dates(con) if x <= day][-30:]
+        hist = defaultdict(dict)
+        for s in con.execute("SELECT * FROM snapshots WHERE store_code=? AND date BETWEEN ? AND ?", (code, days[0], day)):
+            hist[s["pc_id"]][s["date"]] = dict(s)
+        flagged = defaultdict(set)
+        for s in con.execute("SELECT date, pc_id, issue_type FROM issues WHERE store_code=? AND date BETWEEN ? AND ?",
+                             (code, days[0], day)):
+            flagged[(s["pc_id"] or "", s["issue_type"])].add(s["date"])
+        return days, hist, charts.store_panels(store_pcs, hist, days, cfg, flagged)
+
     @app.get("/healthz")
     def healthz():
         return {"ok": True, "latest": (run_dates() or [None])[-1]}
 
     @app.get("/", response_class=HTMLResponse)
-    def overview(request: Request, d: str | None = None):
+    def overview(request: Request, d: str | None = None, status: str = "", type: str = ""):
         day = pick_day(d)
         stores, pcs, issues = load(day)
         rows = store_rows(stores, issues)
-        sev = Counter(r["worst"] for r in rows)
+        all_tiles = tiles(stores, pcs, issues)
         resolved = [dict(r) for r in con.execute("SELECT * FROM resolved WHERE date=?", (day,))]
-        missing = [i for i in issues if i["issue_type"] == "missing_pull"]
         owners = Counter(i["owner"] for i in issues if not i["handled"])
         types = Counter(i["issue_type"] for i in issues)
-        trend_days = [x for x in run_dates() if x <= day][-30:]
+        trend_days = window(day)
         daily = []
         for x in trend_days:
             r = con.execute("SELECT COUNT(DISTINCT store_code) FROM issues WHERE date=? AND severity IN ('high','critical')", (x,)).fetchone()[0]
             a = con.execute("SELECT COUNT(DISTINCT store_code) FROM issues WHERE date=?", (x,)).fetchone()[0]
             daily.append((x, a, r))
-        urgent = [r for r in rows if RANK[r["worst"]] >= RANK["high"]]
+        ds = run_dates()
+        prev = ds[ds.index(day) - 1] if ds.index(day) > 0 else None
+        tt = fleet.type_trend(con, trend_days)
+        total = sum(types.values()) or 1
+        breakdown = [{"type": k, "label": labels[k], "count": types[k], "pct": 100 * types[k] / total}
+                     for k in ISSUE_ORDER if types[k]]
+        st_counts = Counter(x["status"] for x in all_tiles)
         return t.TemplateResponse(request, "overview.html", ctx(
-            request, day, "today", rows=rows, urgent=urgent, sev_count=sev, resolved=resolved, missing=missing,
-            owners=owners, types=types, issues=issues, n_stores=len(stores),
-            new=[i for i in issues if i["is_new"]],
-            spark=charts.flagged_bars(daily, day), type_bars=charts.type_bars(types, labels)))
+            request, day, "today", rows=rows, tiles=filter_tiles(all_tiles, status, type), all_tiles=all_tiles,
+            f_status=status if status in fleet.STATUSES else "", f_type=type if type in ISSUE_ORDER else "",
+            st_counts=st_counts, kpis=fleet.kpis(con, day, prev), resolved=resolved, owners=owners, types=types,
+            issues=issues, n_stores=len(stores), new=[i for i in issues if i["is_new"]], breakdown=breakdown,
+            spark=charts.flagged_bars(daily, day), stack=charts.stacked_types(trend_days, tt, labels, ISSUE_ORDER),
+            type_bars=charts.type_bars(types, labels)))
 
     @app.get("/stores", response_class=HTMLResponse)
     def stores_page(request: Request, d: str | None = None, type: str = "", severity: str = "", owner: str = "",
-                    show: str = "open"):
+                    show: str = "open", status: str = ""):
         day = pick_day(d)
         stores, pcs, issues = load(day)
         sel = issues
@@ -125,9 +173,13 @@ def create_app(con=None, cfg=None) -> FastAPI:
         rows = store_rows(stores, sel)
         if show == "open":
             rows = [r for r in rows if r["open"]]
+        if status in fleet.STATUSES:
+            st_of = {x["code"]: x["status"] for x in tiles(stores, pcs, issues)}
+            rows = [r for r in rows if st_of[r["code"]] == status]
         healthy = len(stores) - len({i["store_code"] for i in issues})
         return t.TemplateResponse(request, "stores.html", ctx(
-            request, day, "stores", rows=rows, f_type=type, f_sev=severity, f_owner=owner, show=show,
+            request, day, "stores", rows=rows, f_type=type, f_sev=severity, f_owner=owner, show=show, f_status=status if status in fleet.STATUSES else "",
+            status_of={x["code"]: x["status"] for x in tiles(stores, pcs, issues)},
             healthy=healthy, total=len(stores), all_flagged=len({i["store_code"] for i in issues})))
 
     @app.get("/stores/{code}", response_class=HTMLResponse)
@@ -142,20 +194,28 @@ def create_app(con=None, cfg=None) -> FastAPI:
         store_pcs = [p for p in pcs.values() if p["store_code"] == code]
         store_pcs.sort(key=lambda p: p["pc_id"])
         today = {s["pc_id"]: dict(s) for s in con.execute("SELECT * FROM snapshots WHERE date=? AND store_code=?", (day, code))}
-        days = [x for x in db.snapshot_dates(con) if x <= day][-30:]
-        hist = defaultdict(dict)
-        for s in con.execute("SELECT * FROM snapshots WHERE store_code=? AND date BETWEEN ? AND ?", (code, days[0], day)):
-            hist[s["pc_id"]][s["date"]] = dict(s)
-        flagged = defaultdict(set)
-        for s in con.execute("SELECT date, pc_id, issue_type FROM issues WHERE store_code=? AND date BETWEEN ? AND ?",
-                             (code, days[0], day)):
-            flagged[(s["pc_id"] or "", s["issue_type"])].add(s["date"])
-        panels = charts.store_panels(store_pcs, hist, days, cfg, flagged)
+        days, hist, panels = history(code, day, store_pcs)
         resolved = [dict(x) for x in con.execute("SELECT * FROM resolved WHERE date=? AND store_code=?", (day, code))]
         return t.TemplateResponse(request, "store.html", ctx(
             request, day, "stores", store=stores[code], issues=mine, explanation=explanation,
             writer=r["writer"] if r else "", pcs=store_pcs, today=today, panels=panels, resolved=resolved,
-            history_from=days[0]))
+            history_from=days[0], status=fleet.store_status(mine)))
+
+    @app.get("/stores/{code}/panel", response_class=HTMLResponse)
+    def store_panel(request: Request, code: str, d: str | None = None):
+        """Side-panel fragment for the Today grid: what is wrong, reading vs limit, owner, steps, 30-day charts."""
+        day = pick_day(d)
+        stores, pcs, issues = load(day)
+        if code not in stores:
+            raise HTTPException(404, "Unknown store")
+        mine = [i for i in issues if i["store_code"] == code]
+        r = con.execute("SELECT explanations, writer FROM resumes WHERE date=?", (day,)).fetchone()
+        store_pcs = sorted((p for p in pcs.values() if p["store_code"] == code), key=lambda p: p["pc_id"])
+        days, hist, panels = history(code, day, store_pcs)
+        return t.TemplateResponse(request, "_panel.html", ctx(
+            request, day, "today", store=stores[code], issues=mine, pcs=store_pcs, panels=panels,
+            explanation=json.loads(r["explanations"]).get(code) if r else None, writer=r["writer"] if r else "",
+            status=fleet.store_status(mine), history_from=days[0]))
 
     @app.post("/handled")
     def mark_handled(d: str = Form(...), store: str = Form(...), issue_type: str = Form(...), note: str = Form(""),

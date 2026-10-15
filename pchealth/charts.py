@@ -13,7 +13,7 @@ def _d(x: str) -> str:
     return f"{v.day} {v.strftime('%b')}"
 
 
-def flagged_bars(daily: list[tuple[str, int, int]], today: str, w: int = 420, h: int = 96) -> Markup:
+def flagged_bars(daily: list[tuple[str, int, int]], today: str, w: int = 560, h: int = 150) -> Markup:
     """30 daily bars: stores flagged (pale) with the high/critical share (ink) on top."""
     if not daily:
         return Markup("")
@@ -164,3 +164,40 @@ def store_panels(pcs: list[dict], hist: dict, days: list[str], cfg: dict, flagge
             rows.append({"role": pc["role"], "cells": cells})
         strips.append({"title": title, "rows": rows})
     return {"lines": lines, "strips": strips, "legend": [pc["role"] for pc in pcs]}
+
+
+def stacked_types(days: list[str], trend: dict[str, list[int]], labels: dict, order: list[str],
+                  w: int = 560, h: int = 150) -> Markup:
+    """Issues per day stacked by type; one colour class per type (t-<type>) so the legend matches."""
+    if not days:
+        return Markup("")
+    n = len(days)
+    totals = [sum(trend[k][j] for k in order) for j in range(n)]
+    top = max(totals) or 1
+    left, bottom = 26, 16
+    gap = 2
+    bw = (w - left - gap * (n - 1)) / n
+    base = h - bottom
+    ph = base - 6
+    p = [f'<svg class="chart stack" viewBox="0 0 {w} {h}" role="img" aria-label="Issues per day by type, last {n} days">']
+    for v in (0, top):
+        y = base - (v / top) * ph
+        p.append(f'<line class="grid" x1="{left}" x2="{w}" y1="{y:.1f}" y2="{y:.1f}"/>')
+        p.append(f'<text class="tick" x="{left - 4}" y="{y + 3:.1f}" text-anchor="end">{v}</text>')
+    for j, d in enumerate(days):
+        x = left + j * (bw + gap)
+        y = base
+        tip = ", ".join(f"{labels[k]} {trend[k][j]}" for k in order if trend[k][j])
+        p.append(f'<g><title>{_d(d)}: {totals[j]} issues{" · " + escape(tip) if tip else ""}</title>')
+        for k in order:
+            v = trend[k][j]
+            if not v:
+                continue
+            hh = (v / top) * ph
+            y -= hh
+            p.append(f'<rect class="t-{k}" x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{hh:.1f}"/>')
+        p.append("</g>")
+    p.append(f'<text class="tick" x="{left}" y="{h - 2}">{_d(days[0])}</text>')
+    p.append(f'<text class="tick" x="{w}" y="{h - 2}" text-anchor="end">{_d(days[-1])}</text>')
+    p.append("</svg>")
+    return Markup("".join(p))

@@ -6,7 +6,9 @@ This project automates that roll-up. A deterministic rule engine checks every PC
 
 All stores, codes and readings are **synthetic**. Nothing here comes from a real company.
 
-![Today: ranked list of stores to fix](docs/screenshots/1-overview.png)
+![Today: KPI tiles, a status tile for each of the 60 stores, issue mix and 30-day fleet trends](docs/screenshots/1-overview.png)
+
+The Today screen is a status board: PC counts (healthy, warning, critical) and stores with no data, each with the change since yesterday; one tile per store coloured red, amber, green or grey and filterable by status and issue type; the issue mix; and 30-day trends. Click a store to open a side panel with the reading vs limit, owner, steps and 30-day per-PC charts.
 
 ## What it does every morning
 
@@ -59,8 +61,9 @@ The AI never sees anything except the rule results for that day, and it can't ad
 
 | | |
 |---|---|
-| ![Stores](docs/screenshots/2-stores.png) Store list, filterable by issue type, severity and owner | ![Store detail](docs/screenshots/3-store-detail.png) Store detail: each issue with reading vs limit, playbook, "mark handled"; every PC's specs; 30-day charts with the limit line |
+| ![Stores](docs/screenshots/2-stores.png) Store list, filterable by status, issue type, severity and owner | ![Store detail](docs/screenshots/3-store-detail.png) Store detail: each issue with reading vs limit, playbook, "mark handled"; every PC's specs; 30-day charts with the limit line |
 | ![Resume](docs/screenshots/4-resume.png) Daily resume with copy button, Excel and CSV download | ![Issue types](docs/screenshots/5-issue-types.png) Issue-type breakdown with a 30-day sparkline each |
+| ![Side panel](docs/screenshots/6-side-panel.png) Side panel after clicking a store tile | |
 
 ## Results (measured on the simulator, not on a real fleet)
 

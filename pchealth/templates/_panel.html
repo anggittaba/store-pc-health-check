@@ -1,0 +1,22 @@
+{% from "_macros.html" import sev, tags, dot, key_charts %}
+<header class="panel-head st-{{ status }}">
+  <p class="mono panel-code">{{ dot(status) }}{{ store.code }} · {{ store.area }} · {{ pcs|length }} PC{{ 's' if pcs|length != 1 }}</p>
+  <h2 id="drawer-title">{{ store.name }}</h2>
+  <p class="panel-status">{{ STATUS_LABEL[status] }}{% if issues %} · {{ issues|length }} issue{{ 's' if issues|length != 1 }} today{% else %} · all checks passed today{% endif %}</p>
+</header>
+{% if explanation %}<p class="explain">{{ explanation }}</p>{% endif %}
+{% for i in issues %}
+<div class="mini-issue">
+  <p class="issue-top">{{ sev(i.severity) }}<span class="itag">{{ TAG[i.issue_type] }}</span> <strong>{{ LABELS[i.issue_type] }}</strong> · {{ i.where }}</p>
+  <div class="rvl">
+    <div><span class="k">Reading</span><span class="v mono">{{ i.value }}</span></div>
+    <div><span class="k">Limit</span><span class="v mono">{{ i.threshold }}</span></div>
+  </div>
+  <p class="tags">{{ tags(i) }}</p>
+  <p class="owner"><span class="k">Owner</span> {{ i.pb.owner }}</p>
+  <ol class="steps">{% for s in i.pb.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+</div>
+{% endfor %}
+<h3 class="panel-sub">Last 30 days per PC</h3>
+{{ key_charts(panels) }}
+<p class="panel-actions"><a class="btn" href="/stores/{{ store.code }}?d={{ day }}">Open store page · mark handled</a></p>

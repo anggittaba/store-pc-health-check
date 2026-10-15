@@ -1,87 +1,141 @@
 {% extends "base.html" %}
-{% from "_macros.html" import sev, tags %}
+{% from "_macros.html" import sev, dot %}
 {% block title %}Today{% endblock %}
 {% block main %}
-<section class="hero" aria-labelledby="hero-h">
-  <div class="hero-figure">
-    <span class="figure tnum" aria-hidden="true">{{ rows|length }}</span>
-    <h1 id="hero-h"><span class="skip">{{ rows|length }} </span>stores need someone today.</h1>
-  </div>
-  <div class="hero-side">
-    <p class="qualifier">Out of {{ n_stores }} stores, <strong>{{ urgent|length }}</strong> have a high or critical issue{% if missing %} and <strong>{{ missing|length }}</strong> sent no data at all{% endif %}. {{ new|length }} issues are new since yesterday; {{ resolved|length }} cleared.</p>
-    <div class="sev-strip">
-      {% for s in ['critical', 'high', 'medium', 'low'] %}
-      <a href="/stores?d={{ day }}&severity={{ s }}"><span class="n tnum">{{ sev_count[s] }}</span><span class="sev sev-{{ s }}">{{ s }}</span></a>
-      {% endfor %}
-    </div>
-    <a class="chip" href="/resume?d={{ day }}">Read today's resume →</a>
-  </div>
+<h1 class="sr">Fleet status for {{ nice_date(day) }}</h1>
+<section class="kpis" aria-label="Fleet health today">
+  {% for k in kpis %}
+  <a class="kpi kpi-{{ k.key }}" href="/?d={{ day }}&status={{ k.key }}#grid">
+    <span class="kpi-label">{{ dot(k.key) }}{{ k.label }}</span>
+    <span class="kpi-value mono">{{ k.value }}</span>
+    <span class="kpi-sub">{% if k.delta is not none %}<span class="delta {{ 'up-good' if k.good else ('up-bad' if k.good == false else 'flat') }}">{{ '+' if k.delta > 0 else ('±' if k.delta == 0 else '−') }}{{ k.delta|abs }}</span> vs yesterday · {% endif %}{{ k.note }}</span>
+  </a>
+  {% endfor %}
 </section>
 
-<section aria-labelledby="first-h">
-  <div class="section-head">
-    <h2 id="first-h">Do first</h2>
-    <p>Stores ranked by their worst issue, then by how long it has lasted.</p>
+<div class="board">
+<section class="card grid-card" id="grid" aria-labelledby="grid-h">
+  <div class="card-head">
+    <h2 id="grid-h">Stores <span class="count mono" id="grid-count">{{ tiles|length }}/{{ all_tiles|length }}</span></h2>
+    <a class="btn ghost" href="/resume?d={{ day }}">Today's resume</a>
   </div>
-  {% if urgent %}
-  <div class="table-scroll">
-  <table>
-    <thead><tr><th class="rank">#</th><th>Store</th><th>Worst issue</th><th>Reading</th><th>Owner · first step</th><th class="hide-sm">Also</th></tr></thead>
-    <tbody>
-    {% for r in urgent[:8] %}{% set i = r.top %}
-      <tr class="{{ 'is-handled' if not r.open }}">
-        <td class="rank">{{ loop.index }}</td>
-        <td class="store-cell"><a href="/stores/{{ r.code }}?d={{ day }}">{{ r.name }}</a><span class="code">{{ r.code }} · {{ r.area }}</span></td>
-        <td>{{ sev(i.severity) }}<div>{{ LABELS[i.issue_type] }} · {{ i.where }}</div><div>{{ tags(i) }}</div></td>
-        <td class="reading">{{ i.value }}</td>
-        <td><strong>{{ i.owner }}</strong><p class="step">{{ i.pb.steps[0] }}</p></td>
-        <td class="hide-sm">{% for o in r['items'][1:] %}{{ LABELS[o.issue_type] }}{% if not loop.last %}, {% endif %}{% else %}<span class="muted">—</span>{% endfor %}</td>
-      </tr>
+  <form class="gridfilter" method="get" action="/" id="gridfilter">
+    <input type="hidden" name="d" value="{{ day }}">
+    <div class="seg" role="radiogroup" aria-label="Status">
+      <label><input type="radio" name="status" value="" {% if not f_status %}checked{% endif %}><span>All <span class="mono">{{ all_tiles|length }}</span></span></label>
+      {% for s in STATUSES %}
+      <label><input type="radio" name="status" value="{{ s }}" {% if f_status == s %}checked{% endif %}><span>{{ dot(s) }}{{ STATUS_LABEL[s] }} <span class="mono">{{ st_counts[s] }}</span></span></label>
+      {% endfor %}
+    </div>
+    <label class="sel">Issue type
+      <select name="type">
+        <option value="">All types</option>
+        {% for k in ISSUE_ORDER %}<option value="{{ k }}" {% if f_type == k %}selected{% endif %}>{{ LABELS[k] }} ({{ types[k] }})</option>{% endfor %}
+      </select>
+    </label>
+    <noscript><button class="btn" type="submit">Filter</button></noscript>
+  </form>
+  <ul class="tiles" id="tiles">
+    {% for x in all_tiles %}
+    <li class="tile st-{{ x.status }}{{ ' is-handled' if x.n and not x.open }}" data-status="{{ x.status }}" data-types="{{ x.types|join(' ') }}"{% if x not in tiles %} hidden{% endif %}>
+      <a href="/stores/{{ x.code }}?d={{ day }}" data-code="{{ x.code }}" aria-label="{{ x.code }} {{ x.name }}: {{ STATUS_LABEL[x.status] }}{% if x.top %}, worst issue {{ LABELS[x.top.issue_type] }}{% endif %}">
+        <span class="tile-code mono">{{ x.code }}</span>
+        <span class="tile-name">{{ x.name }}</span>
+        <span class="tile-foot">{% if x.top %}<span class="itag">{{ TAG[x.top.issue_type] }}</span>{% if x.n > 1 %}<span class="more mono">+{{ x.n - 1 }}</span>{% endif %}{% else %}<span class="ok-tag">OK · {{ x.pcs }} PC{{ 's' if x.pcs != 1 }}</span>{% endif %}</span>
+      </a>
+    </li>
     {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% if urgent|length > 8 %}<p class="figure-note"><a href="/stores?d={{ day }}&severity=high">{{ urgent|length - 8 }} more high or critical stores →</a></p>{% endif %}
-  {% else %}
-  <p class="empty">Nothing high or critical today. Medium and low items are on the <a href="/stores?d={{ day }}">store list</a>.</p>
-  {% endif %}
+  </ul>
+  <p class="empty" id="grid-empty"{% if tiles %} hidden{% endif %}>No store matches these filters.</p>
+  <p class="note">Red: worst issue high or critical. Amber: medium or low. Grey: the store sent no data. Click a store for the reading, limit, owner and steps.</p>
 </section>
 
-<section class="split">
-  <div>
-    <div class="section-head"><h2>By issue type</h2><p>{{ issues|length }} issues across {{ rows|length }} stores</p></div>
-    <ul class="typebars">
-      {% for b in type_bars %}
-      <li><a href="/stores?d={{ day }}&type={{ b.type }}&show=all">{{ b.label }}</a><span class="track"><span class="fill" style="width: {{ b.pct }}%"></span></span><span class="tnum">{{ b.count }}</span></li>
-      {% endfor %}
-    </ul>
-    <div class="ledger">
-      <div>
-        <h3>New since yesterday</h3>
-        <ul>{% for i in new[:7] %}<li><a href="/stores/{{ i.store_code }}?d={{ day }}">{{ i.store_code }}</a> · {{ LABELS[i.issue_type] }}</li>{% else %}<li class="muted">Nothing new.</li>{% endfor %}
-        {% if new|length > 7 %}<li class="muted">and {{ new|length - 7 }} more</li>{% endif %}</ul>
-      </div>
-      <div>
-        <h3>Cleared since yesterday</h3>
-        <ul>{% for r in resolved[:7] %}<li><a href="/stores/{{ r.store_code }}?d={{ day }}">{{ r.store_code }}</a> · {{ LABELS[r.issue_type] }} <span class="muted">after {{ r.open_days }}d</span></li>{% else %}<li class="muted">Nothing cleared.</li>{% endfor %}
-        {% if resolved|length > 7 %}<li class="muted">and {{ resolved|length - 7 }} more</li>{% endif %}</ul>
-      </div>
-    </div>
+<aside class="card side" aria-labelledby="mix-h">
+  <div class="card-head"><h2 id="mix-h">Issues by type</h2><span class="count mono">{{ issues|length }}</span></div>
+  <div class="mixbar" role="img" aria-label="Issue mix today: {% for b in breakdown %}{{ b.label }} {{ b.count }}{% if not loop.last %}, {% endif %}{% endfor %}">
+    {% for b in breakdown %}<span class="t-{{ b.type }}" style="flex-grow: {{ b.count }}" title="{{ b.label }}: {{ b.count }}"></span>{% endfor %}
   </div>
-  <div>
-    <div class="section-head"><h2>Last 30 days</h2><p>stores flagged per day</p></div>
+  <ul class="mixlist">
+    {% for b in breakdown|sort(attribute='count', reverse=true) %}
+    <li><a href="/?d={{ day }}&type={{ b.type }}#grid" data-type="{{ b.type }}"><i class="sw t-{{ b.type }}" aria-hidden="true"></i>{{ b.label }}</a><span class="mono">{{ b.count }}</span></li>
+    {% endfor %}
+  </ul>
+  <div class="card-head sub"><h2>Open work by owner</h2></div>
+  <ul class="mixlist">
+    {% for o in OWNERS %}<li><span>{{ o }}</span><span class="mono">{{ owners[o] }}</span></li>{% endfor %}
+  </ul>
+  <div class="card-head sub"><h2>Since yesterday</h2></div>
+  <ul class="mixlist">
+    <li><span>New issues</span><span class="mono">{{ new|length }}</span></li>
+    <li><span>Cleared</span><span class="mono">{{ resolved|length }}</span></li>
+  </ul>
+</aside>
+</div>
+
+<div class="charts">
+  <section class="card" aria-labelledby="t1-h">
+    <div class="card-head"><h2 id="t1-h">Stores flagged per day</h2><span class="count">last 30 days</span></div>
     {{ spark }}
-    <p class="figure-note"><span class="key">all flagged stores</span><span class="key urgent">high or critical</span></p>
-    <div class="section-head" style="margin-top: var(--space-xl)"><h2>Open work by owner</h2></div>
-    <table>
-      <tbody>
-      {% for o in OWNERS %}<tr><td>{{ o }}</td><td class="num tnum">{{ owners[o] }}</td><td class="muted">{{ {'Store staff': 'checks on site, guided by phone', 'Remote IT': 'fixes from the office', 'Vendor': 'site visit or parts'}[o] }}</td></tr>{% endfor %}
-      </tbody>
-    </table>
-    {% if missing %}
-    <div class="section-head" style="margin-top: var(--space-xl)"><h2>No data today</h2></div>
-    <div class="ledger one"><ul>{% for i in missing %}<li><a href="/stores/{{ i.store_code }}?d={{ day }}">{{ i.store_code }}</a> · {% if i.streak > 1 %}{{ ordinal(i.streak) }} day without a pull{% else %}no pull today{% endif %}</li>{% endfor %}</ul></div>
-    {% endif %}
-  </div>
-</section>
+    <p class="legend"><span class="key all">any issue</span><span class="key urgent">high or critical</span></p>
+  </section>
+  <section class="card" aria-labelledby="t2-h">
+    <div class="card-head"><h2 id="t2-h">Issues per day by type</h2><span class="count">last 30 days</span></div>
+    {{ stack }}
+    <p class="legend">{% for k in ISSUE_ORDER %}<span><i class="sw t-{{ k }}" aria-hidden="true"></i>{{ TAG[k] }}</span>{% endfor %}</p>
+  </section>
+</div>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-scrim" data-close></div>
+  <section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1">
+    <button class="btn ghost drawer-x" type="button" data-close aria-label="Close panel">Close</button>
+    <div id="drawer-body"></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const form = document.getElementById('gridfilter');
+  const tiles = [...document.querySelectorAll('#tiles .tile')];
+  const count = document.getElementById('grid-count');
+  const empty = document.getElementById('grid-empty');
+  function apply() {
+    const st = form.querySelector('input[name=status]:checked').value;
+    const ty = form.querySelector('select[name=type]').value;
+    let n = 0;
+    tiles.forEach(t => {
+      const ok = (!st || t.dataset.status === st) && (!ty || t.dataset.types.split(' ').includes(ty));
+      t.hidden = !ok; if (ok) n++;
+    });
+    count.textContent = n + '/' + tiles.length;
+    empty.hidden = n > 0;
+    const u = new URL(location.href);
+    st ? u.searchParams.set('status', st) : u.searchParams.delete('status');
+    ty ? u.searchParams.set('type', ty) : u.searchParams.delete('type');
+    history.replaceState(null, '', u);
+  }
+  form.addEventListener('change', apply);
+  document.querySelectorAll('.mixlist a[data-type]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault(); form.querySelector('select[name=type]').value = a.dataset.type; apply();
+    document.getElementById('grid').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+  }));
+  const drawer = document.getElementById('drawer');
+  const body = document.getElementById('drawer-body');
+  let opener = null;
+  function close() { drawer.hidden = true; document.body.classList.remove('locked'); if (opener) opener.focus(); }
+  drawer.addEventListener('click', e => { if (e.target.closest('[data-close]')) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) close(); });
+  document.getElementById('tiles').addEventListener('click', async e => {
+    const a = e.target.closest('a[data-code]');
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault(); opener = a;
+    const r = await fetch('/stores/' + a.dataset.code + '/panel?d={{ day }}');
+    if (!r.ok) { location.href = a.href; return; }
+    body.innerHTML = await r.text();
+    drawer.hidden = false; document.body.classList.add('locked');
+    drawer.querySelector('.drawer-panel').focus();
+  });
+})();
+</script>
 {% endblock %}

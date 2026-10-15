@@ -6,20 +6,15 @@
 <title>{% block title %}Store PC Health Check{% endblock %} · {{ nice_date(day) }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600&family=Playfair+Display:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="wrap">
-  <header class="mast">
-    <div class="mast-line">
-      {% if prev_day %}<a href="{{ request.url.path }}?d={{ prev_day }}" aria-label="Previous day">‹ {{ nice_date(prev_day)[:-5] }}</a>{% else %}<span class="off">‹</span>{% endif %}
-      <span class="mast-issue">Day {{ edition }} of {{ n_days }} · {{ nice_date(day) }}{% if pull_window %} · pulls received {{ pull_window }}{% endif %}{% if day != latest %} · <a href="{{ request.url.path }}">back to today</a>{% endif %}</span>
-      {% if next_day %}<a href="{{ request.url.path }}?d={{ next_day }}" aria-label="Next day">{{ nice_date(next_day)[:-5] }} ›</a>{% else %}<span class="off">›</span>{% endif %}
-    </div>
-    <a class="mast-name" href="/?d={{ day }}">Store PC Health Check</a>
-    <nav class="mast-nav" aria-label="Primary">
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="/?d={{ day }}"><svg class="brand-mark" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6"/><rect x="9" y="1" width="6" height="6"/><rect x="1" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/></svg>Store PC Health Check</a>
+    <nav class="tabs" aria-label="Primary">
       <ul>
         <li><a href="/?d={{ day }}" {% if page == 'today' %}aria-current="page"{% endif %}>Today</a></li>
         <li><a href="/stores?d={{ day }}" {% if page == 'stores' %}aria-current="page"{% endif %}>Stores</a></li>
@@ -28,13 +23,20 @@
         <li><a href="/runs?d={{ day }}" {% if page == 'runs' %}aria-current="page"{% endif %}>Run log</a></li>
       </ul>
     </nav>
-    <hr class="mast-rule" aria-hidden="true">
-  </header>
+    <div class="pager">
+      {% if prev_day %}<a href="{{ request.url.path }}?d={{ prev_day }}" aria-label="Previous day">‹</a>{% else %}<span class="off" aria-hidden="true">‹</span>{% endif %}
+      <span class="pager-day"><span class="mono">{{ day }}</span>{% if pull_window %}<span class="pager-sub">pulls {{ pull_window }}</span>{% endif %}</span>
+      {% if next_day %}<a href="{{ request.url.path }}?d={{ next_day }}" aria-label="Next day">›</a>{% else %}<span class="off" aria-hidden="true">›</span>{% endif %}
+      {% if day != latest %}<a class="pager-now" href="{{ request.url.path }}">Latest</a>{% endif %}
+    </div>
+  </div>
+</header>
+<div class="wrap">
   <main id="main">
   {% block main %}{% endblock %}
   </main>
-  <footer class="colophon">
-    <p>{% if run %}Run {{ run.id }} for {{ day }}, finished {{ run.finished_at|replace('T', ' ') }}, trigger {{ run.trigger }}. {{ run.pcs_reported }} of {{ run.pcs_expected }} PCs reported; {{ run.stores_missing }} {{ 'store' if run.stores_missing == 1 else 'stores' }} sent nothing. Text writer: {{ run.writer }}.{% endif %}
+  <footer class="foot">
+    <p>{% if run %}Run {{ run.id }} for {{ day }} (day {{ edition }} of {{ n_days }}), finished {{ run.finished_at|replace('T', ' ') }}, trigger {{ run.trigger }}. {{ run.pcs_reported }} of {{ run.pcs_expected }} PCs reported; {{ run.stores_missing }} {{ 'store' if run.stores_missing == 1 else 'stores' }} sent nothing. Text writer: {{ run.writer }}.{% endif %}
     Issues and severities come from fixed rules in config/rules.toml, never from AI. The resume is a draft: nothing here is sent to anyone automatically.
     All stores, codes and readings are synthetic, generated for this demo.</p>
   </footer>

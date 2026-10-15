@@ -8,6 +8,17 @@
     "nav": "N6 newspaper masthead",
     "footer": "Ft4 dense colophon (run log)",
     "enrichment": "none",
-    "brief": "Store PC health recap · ranked daily list of stores to fix, per-store 30-day history, copyable resume"
+    "brief": "Store PC health recap \u00b7 ranked daily list of stores to fix, per-store 30-day history, copyable resume"
+  },
+  {
+    "date": "2026-10-15",
+    "genre": "modern-minimal (ops console)",
+    "macrostructure": "Bento Dashboard",
+    "theme": "custom Graphite console",
+    "theme_axes": "dark (warm graphite 70) / IBM Plex Sans + Mono / status red-amber-green-grey, lavender focus accent",
+    "nav": "N1 top bar with tabs + day pager",
+    "footer": "Ft4 dense colophon (run log)",
+    "enrichment": "none",
+    "brief": "Redesign as a NOC-style monitoring board: KPI tiles with deltas, 60 store status tiles filterable by status and issue type, issue mix bar, 30-day fleet trends, side panel per store"
   }
 ]

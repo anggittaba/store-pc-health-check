@@ -1,2 +1,45 @@
 {% macro sev(s) %}<span class="sev sev-{{ s }}">{{ s }}</span>{% endmacro %}
 {% macro tags(i) %}{% if i.is_new %}<span class="tag new">new today</span>{% endif %}{% if i.streak > 1 %} <span class="tag">{{ ordinal(i.streak) }} day in a row</span>{% endif %}{% if i.trend == 'worsening' %} <span class="tag worse">getting worse</span>{% elif i.trend == 'improving' %} <span class="tag">improving</span>{% endif %}{% if i.handled %} <span class="tag done">handled</span>{% endif %}{% endmacro %}
+{% macro dot(st) %}<span class="dot dot-{{ st }}" aria-hidden="true"></span>{% endmacro %}
+{% macro issue_card(i, store, day, idx) %}
+<article class="issue" id="{{ i.issue_type }}{{ '-' ~ i.pc_id if i.pc_id }}">
+  <div class="issue-main">
+    <p class="issue-top">{{ sev(i.severity) }}<span class="itag">{{ TAG[i.issue_type] }}</span>{% if i.severity != i.base_severity %} <span class="tag">raised from {{ i.base_severity }}: {{ ordinal(i.streak) }} day in a row</span>{% endif %}</p>
+    <h3>{{ LABELS[i.issue_type] }} · {{ i.where }}</h3>
+    <p class="tags">{{ tags(i) }}</p>
+    <div class="rvl">
+      <div><span class="k">Reading</span><span class="v mono">{{ i.value }}</span></div>
+      <div><span class="k">Limit</span><span class="v mono">{{ i.threshold }}</span></div>
+    </div>
+    <p class="why"><span class="k">Why flagged</span> {{ i.reason }}</p>
+    <p class="impact">{{ i.pb.impact }}</p>
+  </div>
+  <div class="issue-side">
+    <p class="owner"><span class="k">Owner</span> {{ i.pb.owner }}</p>
+    <ol class="steps">{% for s in i.pb.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+    <p class="note">Escalate: {{ i.pb.escalate }}</p>
+    <div class="handled-box">
+      {% for h in i.handled %}
+      <p class="handled-note"><span class="tag done">Handled</span> by {{ h.by }} at {{ h.at|hm }}{% if h.note %}: {{ h.note }}{% endif %}</p>
+      <form method="post" action="/handled/{{ h.id }}/undo"><input type="hidden" name="back" value="/stores/{{ store.code }}?d={{ day }}"><button class="linkish" type="submit">Undo</button></form>
+      {% else %}
+      <form method="post" action="/handled" class="handled-form">
+        <input type="hidden" name="d" value="{{ day }}"><input type="hidden" name="store" value="{{ store.code }}">
+        <input type="hidden" name="issue_type" value="{{ i.issue_type }}"><input type="hidden" name="back" value="/stores/{{ store.code }}?d={{ day }}">
+        <label class="label" for="note-{{ idx }}-{{ i.issue_type }}">Note (optional)</label>
+        <textarea id="note-{{ idx }}-{{ i.issue_type }}" name="note" rows="2" placeholder="e.g. Store moved the box off the PC; check again tomorrow."></textarea>
+        <button class="btn" type="submit">Mark handled</button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+</article>
+{% endmacro %}
+{% macro key_charts(panels) %}
+<div class="legend">{% for r in panels.legend %}<span class="s{{ loop.index0 }}">{{ r }}</span>{% endfor %}<span class="lim">limit from rules.toml</span></div>
+<div class="panels">
+  {% for p in panels.lines if p.type in ['overheating', 'disk_space', 'no_reboot'] %}
+  <div class="panel"><h3>{{ p.title }} <span class="unit">{{ p.unit }}</span></h3>{{ p.svg }}</div>
+  {% endfor %}
+</div>
+{% endmacro %}

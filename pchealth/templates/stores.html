@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import sev, tags %}
+{% from "_macros.html" import sev, tags, dot %}
 {% block title %}Stores{% endblock %}
 {% block main %}
 <div class="page-title">
@@ -12,6 +12,12 @@
     <select name="type">
       <option value="">All types</option>
       {% for k in ISSUE_ORDER %}<option value="{{ k }}" {% if f_type == k %}selected{% endif %}>{{ LABELS[k] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="">Any</option>
+      {% for s in STATUSES if s != 'healthy' %}<option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ STATUS_LABEL[s] }}</option>{% endfor %}
     </select>
   </label>
   <label>Severity
@@ -30,18 +36,18 @@
     <label><input type="radio" name="show" value="open" {% if show == 'open' %}checked{% endif %}> Open only</label>
     <label><input type="radio" name="show" value="all" {% if show == 'all' %}checked{% endif %}> Include handled</label>
   </div>
-  <button class="chip solid" type="submit">Filter</button>
-  {% if f_type or f_sev or f_owner or show != 'open' %}<a class="chip" href="/stores?d={{ day }}">Clear</a>{% endif %}
+  <button class="btn primary" type="submit">Filter</button>
+  {% if f_type or f_sev or f_owner or f_status or show != 'open' %}<a class="btn ghost" href="/stores?d={{ day }}">Clear</a>{% endif %}
 </form>
-<p class="figure-note" style="margin-bottom: var(--space-sm)">{{ rows|length }} {{ 'store' if rows|length == 1 else 'stores' }} match.</p>
+<p class="note">{{ rows|length }} {{ 'store' if rows|length == 1 else 'stores' }} match.</p>
 {% if rows %}
-<div class="table-scroll">
+<div class="card table-card"><div class="table-scroll">
 <table>
   <thead><tr><th>Store</th><th>Worst</th><th>Issues</th><th class="num">Longest</th><th>Owners</th></tr></thead>
   <tbody>
   {% for r in rows %}
   <tr class="{{ 'is-handled' if not r.open }}">
-    <td class="store-cell"><a href="/stores/{{ r.code }}?d={{ day }}">{{ r.name }}</a><span class="code">{{ r.code }} · {{ r.area }}</span></td>
+    <td class="store-cell">{{ dot(status_of[r.code]) }}<a href="/stores/{{ r.code }}?d={{ day }}">{{ r.name }}</a><span class="code">{{ r.code }} · {{ r.area }}</span></td>
     <td>{{ sev(r.worst) }}</td>
     <td>{% for i in r['items'] %}{% set tg = tags(i)|trim %}<div>{{ LABELS[i.issue_type] }} <span class="muted">· {{ i.where }} · <span class="reading">{{ i.value }}</span></span>{% if tg %} <span class="muted">·</span> {{ tg }}{% endif %}</div>{% endfor %}</td>
     <td class="num tnum">{{ r.streak }}d</td>
@@ -50,7 +56,7 @@
   {% endfor %}
   </tbody>
 </table>
-</div>
+</div></div>
 {% else %}
 <p class="empty">No store matches these filters.</p>
 {% endif %}

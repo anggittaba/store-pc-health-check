@@ -5,11 +5,11 @@
   <div>
     <h1>Today's resume</h1>
     <p class="muted">Copy it into the team chat yourself. This page never sends it.</p>
-    <pre class="paper-copy" id="resume-text">{{ text }}</pre>
+    <pre class="card copytext" id="resume-text">{{ text }}</pre>
     <div class="copy-row">
-      <button class="chip solid" type="button" id="copy" data-target="resume-text">Copy text</button>
-      <a class="chip" href="/export.xlsx?d={{ day }}">Download Excel</a>
-      <a class="chip" href="/export.csv?d={{ day }}">Download CSV</a>
+      <button class="btn primary" type="button" id="copy" data-target="resume-text">Copy text</button>
+      <a class="btn" href="/export.xlsx?d={{ day }}">Download Excel</a>
+      <a class="btn" href="/export.csv?d={{ day }}">Download CSV</a>
       <span class="copied" id="copied" role="status" aria-live="polite"></span>
     </div>
     <dl class="split-ai">
@@ -26,7 +26,7 @@
       <li><h3><a href="/stores/{{ r.code }}?d={{ day }}">{{ r.code }} {{ r.name }}</a></h3><p>{{ expl.get(r.code, '') }}</p></li>
       {% endfor %}
     </ul>
-    {% if rows|length > 12 %}<p class="figure-note"><a href="/stores?d={{ day }}&show=all">{{ rows|length - 12 }} more stores on the store list →</a></p>{% endif %}
+    {% if rows|length > 12 %}<p class="note"><a href="/stores?d={{ day }}&show=all">{{ rows|length - 12 }} more stores on the store list →</a></p>{% endif %}
   </div>
 </div>
 {% endblock %}

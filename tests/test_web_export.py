@@ -66,3 +66,46 @@ def test_exports(client, filled, cfg):
     x = client.get("/export.xlsx")
     wb = load_workbook(io.BytesIO(x.content))
     assert wb.sheetnames[1] == "Resume" and wb.active.max_row == n + 1
+
+
+def test_today_is_a_status_board(client, filled):
+    from pchealth import fleet
+    r = client.get("/")
+    html = r.text
+    # one tile per store, all 60, each with a status class
+    n_stores = filled.execute("SELECT COUNT(*) FROM stores").fetchone()[0]
+    assert html.count('class="tile st-') == n_stores
+    for label in ("Healthy PCs", "Warning PCs", "Critical PCs", "Stores with no data", "vs yesterday"):
+        assert label in html
+    assert 'class="chart stack"' in html and 'class="mixbar"' in html
+    # explanation text is not on the Today screen; it lives behind a click
+    expl = filled.execute("SELECT explanations FROM resumes WHERE date=?", (END.isoformat(),)).fetchone()[0]
+    import json
+    first = next(iter(json.loads(expl).values()))
+    assert first not in html
+
+
+def test_today_filters_server_side(client, filled):
+    code = filled.execute("SELECT store_code FROM issues WHERE date=? AND issue_type='edc_offline'", (END.isoformat(),)).fetchone()[0]
+    html = client.get("/?status=healthy").text
+    import re
+    visible = re.findall(r'<li class="tile st-(\w+)[^"]*"[^>]*?(?<!hidden)>', html)
+    assert visible and set(visible) == {"healthy"}
+    html = client.get("/?type=edc_offline").text
+    shown = re.findall(r'data-types="([^"]*)">', html)
+    assert shown and all("edc_offline" in s for s in shown)
+    assert code in html
+
+
+def test_store_panel_fragment(client, filled):
+    code = filled.execute("SELECT store_code FROM issues WHERE date=? AND pc_id IS NOT NULL LIMIT 1", (END.isoformat(),)).fetchone()[0]
+    r = client.get(f"/stores/{code}/panel")
+    assert r.status_code == 200
+    assert "Reading" in r.text and "Limit" in r.text and "Owner" in r.text
+    assert r.text.count('class="chart line"') >= 3
+    assert "CPU temperature" in r.text and "Disk free" in r.text and "Days since restart" in r.text
+    assert client.get("/stores/NOPE/panel").status_code == 404
+
+
+def test_status_filter_on_store_list(client):
+    assert client.get("/stores?status=critical&show=all").status_code == 200
